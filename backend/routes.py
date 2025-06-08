@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List
-from models import Book
-from database import get_table_client
+from .models import Book
+from .database import get_table_client
 import logging
 
 # Initialize logger

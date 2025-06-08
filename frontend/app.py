@@ -1,5 +1,5 @@
 import streamlit as st
-from auth import authenticate_user_demo, check_authentication, get_auth_url, exchange_code_for_token, logout
+from auth import authenticate_user_demo, check_authentication, get_auth_url, exchange_code_for_token, get_user_profile, logout
 from utils import get_books, add_book, update_book, delete_book
 import logging
 
@@ -8,7 +8,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # FastAPI backend URL - Update this with your VM's public IP
-BACKEND_URL = "http://localhost:8000"  # Change to your VM's public IP when deployed
+BACKEND_URL = "http://48.216.155.232:8000"  # Change to your VM's public IP when deployed
 
 # Configure Streamlit page
 st.set_page_config(
@@ -47,9 +47,13 @@ def main():
                 if auth_code and st.button("Submit Code", key="submit_auth_code"):
                     token = exchange_code_for_token(auth_code)
                     if token:
+                        # Store token and retrieve actual user info from Graph API
                         st.session_state["access_token"] = token
-                        st.session_state["user_info"] = {"name": "Azure User", "email": "unknown"}
-                        st.success("✅ Authentication successful!")
+                        profile = get_user_profile(token)
+                        name = profile.get("displayName") or profile.get("userPrincipalName", "User")
+                        email = profile.get("mail") or profile.get("userPrincipalName", "")
+                        st.session_state["user_info"] = {"name": name, "email": email}
+                        st.success(f"✅ Authentication successful! Welcome {name}")
                         st.rerun()
                     else:
                         st.error("❌ Failed to exchange code for token")

@@ -21,7 +21,7 @@ except Exception as e:
 AUTH_URL = f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/authorize"
 TOKEN_URL = f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/token"
 SCOPE = "https://graph.microsoft.com/User.Read"
-REDIRECT_URI = "http://localhost:8501/callback"
+REDIRECT_URI = "http://48.216.155.232:8501/callback"
 
 def get_auth_url():
     """
@@ -89,3 +89,19 @@ def logout():
         del st.session_state["access_token"]
     if "user_info" in st.session_state:
         del st.session_state["user_info"]
+
+def get_user_profile(access_token):
+    """
+    Fetch the user's profile from Microsoft Graph API using the access token
+    """
+    try:
+        headers = {"Authorization": f"Bearer {access_token}"}
+        response = requests.get("https://graph.microsoft.com/v1.0/me", headers=headers)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            st.error(f"Failed to fetch user profile: {response.status_code} - {response.text}")
+            return {}
+    except Exception as e:
+        st.error(f"Error fetching user profile: {e}")
+        return {}

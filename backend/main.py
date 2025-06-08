@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from routes import book_router
-from auth import validate_token
+from .routes import book_router
+from .auth import validate_token
 import logging
 
 # Initialize logger
@@ -17,7 +17,7 @@ app = FastAPI(
 # Add CORS middleware to allow frontend access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8501", "http://*:8501"],  # Streamlit default port
+    allow_origins=["http://48.216.155.232:8501", "http://*:8501"],  # Streamlit default port
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
