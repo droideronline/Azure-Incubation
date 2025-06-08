@@ -1,5 +1,5 @@
 import streamlit as st
-from auth import authenticate_user_demo, check_authentication, get_auth_url, logout
+from auth import authenticate_user_demo, check_authentication, get_auth_url, exchange_code_for_token, logout
 from utils import get_books, add_book, update_book, delete_book
 import logging
 
@@ -42,12 +42,17 @@ def main():
             if st.button("🔗 Login with Azure AD"):
                 auth_url = get_auth_url()
                 st.markdown(f"[Click here to login with Azure AD]({auth_url})")
-                st.info("After authentication, you'll receive a code. Enter it below:")
-                
-                auth_code = st.text_input("Enter authorization code:")
-                if st.button("Submit Code") and auth_code:
-                    # Handle the auth code exchange
-                    st.info("Code received. In production, this would exchange for a token.")
+                # Prompt for authorization code returned after Azure AD login
+                auth_code = st.text_input("Enter authorization code:", key="auth_code_input")
+                if auth_code and st.button("Submit Code", key="submit_auth_code"):
+                    token = exchange_code_for_token(auth_code)
+                    if token:
+                        st.session_state["access_token"] = token
+                        st.session_state["user_info"] = {"name": "Azure User", "email": "unknown"}
+                        st.success("✅ Authentication successful!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Failed to exchange code for token")
         
         return
     
