@@ -25,39 +25,67 @@ def main():
     # Authentication check
     if not check_authentication():
         st.subheader("🔐 Authentication Required")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.info("**Demo Mode** - Click below for quick access")
-            if st.button("🚀 Demo Login", type="primary"):
-                token = authenticate_user_demo()
-                if token:
-                    st.session_state["access_token"] = token
-                    st.session_state["user_info"] = {"name": "Demo User", "email": "demo@example.com"}
+
+        query_params = st.query_params
+        auth_code_from_query = query_params.get("code")
+
+        if auth_code_from_query:
+            auth_code = auth_code_from_query[0] # query_params returns a list
+            logger.info(f"Auth code from query: {auth_code}")
+            token = exchange_code_for_token(auth_code)
+            if token:
+                st.session_state["access_token"] = token
+                profile = get_user_profile(token)
+                if profile:
+                    name = profile.get("displayName") or profile.get("userPrincipalName", "User")
+                    email = profile.get("mail") or profile.get("userPrincipalName", "")
+                    st.session_state["user_info"] = {"name": name, "email": email}
+                    st.success(f"✅ Welcome, {name}")
+                    # Clear query params to avoid re-processing code
+                    st.query_params.clear()
                     st.rerun()
-        
+                else:
+                    st.error("❌ Failed to fetch user profile after token exchange.")
+            else:
+                st.error("❌ Token exchange failed. Please try logging in again.")
+            return # Stop further rendering if code processing happened
+
+        # Offer Demo and Production login options
+        col1, col2 = st.columns(2)
+        with col1:
+            st.info("**Demo Mode**")
+            if st.button("🚀 Demo Login", key="demo_login_button"):
+                token = authenticate_user_demo()
+                st.session_state["access_token"] = token
+                st.session_state["user_info"] = {"name": "Demo User", "email": "demo@example.com"}
+                st.rerun()
         with col2:
-            st.info("**Production Mode** - Use Azure AD")
-            if st.button("🔗 Login with Azure AD"):
-                auth_url = get_auth_url()
-                st.markdown(f"[Click here to login with Azure AD]({auth_url})")
-                # Prompt for authorization code returned after Azure AD login
-                auth_code = st.text_input("Enter authorization code:", key="auth_code_input")
-                if auth_code and st.button("Submit Code", key="submit_auth_code"):
-                    token = exchange_code_for_token(auth_code)
-                    if token:
-                        # Store token and retrieve actual user info from Graph API
-                        st.session_state["access_token"] = token
-                        profile = get_user_profile(token)
-                        name = profile.get("displayName") or profile.get("userPrincipalName", "User")
-                        email = profile.get("mail") or profile.get("userPrincipalName", "")
-                        st.session_state["user_info"] = {"name": name, "email": email}
-                        st.success(f"✅ Authentication successful! Welcome {name}")
-                        st.rerun()
-                    else:
-                        st.error("❌ Failed to exchange code for token")
-        
+            st.info("**Production Mode**")
+            auth_url = get_auth_url()
+            st.markdown(f'''<a href="{auth_url}" target="_self">🔗 Login with Azure AD</a>''', unsafe_allow_html=True)
+            
+            # Manual code input as a fallback or for specific scenarios if needed
+            # st.markdown("---")
+            # st.markdown("Or, if you have an authorization code, paste it below:")
+            # manual_auth_code = st.text_input("Authorization code:", key="manual_auth_code_input")
+            # if st.button("Submit Code", key="submit_manual_auth_code"):
+            #     if manual_auth_code:
+            #         token = exchange_code_for_token(manual_auth_code)
+            #         if token:
+            #             st.session_state["access_token"] = token
+            #             profile = get_user_profile(token)
+            #             if profile:
+            #                 name = profile.get("displayName") or profile.get("userPrincipalName", "User")
+            #                 email = profile.get("mail") or profile.get("userPrincipalName", "")
+            #                 st.session_state["user_info"] = {"name": name, "email": email}
+            #                 st.success(f"✅ Welcome, {name}")
+            #                 st.rerun()
+            #             else:
+            #                 st.error("❌ Failed to fetch user profile.")
+            #         else:
+            #             st.error("❌ Token exchange failed with manual code.")
+            #     else:
+            #         st.warning("Please enter an authorization code.")
         return
     
     # User is authenticated - show the main application
