@@ -21,7 +21,7 @@ except Exception as e:
 AUTH_URL = f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/authorize"
 TOKEN_URL = f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/token"
 SCOPE = "https://graph.microsoft.com/User.Read"
-REDIRECT_URI = "http://localhost:8501/" # Changed from /callback to / for simpler query param handling
+REDIRECT_URI = "http://localhost:8501/callback" # Changed from /callback to / for simpler query param handling
 
 def get_auth_url():
     """
