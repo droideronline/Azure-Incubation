@@ -26,11 +26,11 @@ def main():
     if not check_authentication():
         st.subheader("🔐 Authentication Required")
 
-        query_params = st.query_params
+        query_params = st.experimental_get_query_params() # Changed from st.query_params
         auth_code_from_query = query_params.get("code")
 
         if auth_code_from_query:
-            auth_code = auth_code_from_query[0] # query_params returns a list
+            auth_code = auth_code_from_query[0] # experimental_get_query_params returns a list
             logger.info(f"Auth code from query: {auth_code}")
             token = exchange_code_for_token(auth_code)
             if token:
@@ -42,7 +42,7 @@ def main():
                     st.session_state["user_info"] = {"name": name, "email": email}
                     st.success(f"✅ Welcome, {name}")
                     # Clear query params to avoid re-processing code
-                    st.query_params.clear()
+                    st.experimental_set_query_params() # Changed to clear params
                     st.rerun()
                 else:
                     st.error("❌ Failed to fetch user profile after token exchange.")
