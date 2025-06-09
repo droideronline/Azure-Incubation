@@ -23,27 +23,36 @@ class CosmosTableClient:
     
     def __init__(self):
         try:
+            logger.info("Starting Cosmos DB Table client initialization...")
+            
             # Get connection string from Key Vault
+            logger.info("Retrieving Cosmos DB connection string from Key Vault...")
             self.connection_string = get_cosmos_connection_string()
             self.table_name = "books"
             
+            logger.info("Creating TableServiceClient...")
             # Initialize TableServiceClient with connection string
             self.table_service_client = TableServiceClient.from_connection_string(
                 conn_str=self.connection_string
             )
             
+            logger.info("Getting table client for table: " + self.table_name)
             # Get table client
             self.table_client = self.table_service_client.get_table_client(
                 table_name=self.table_name
             )
             
             # Create table if it doesn't exist
+            logger.info("Ensuring table exists...")
             self._ensure_table_exists()
             
             logger.info("Successfully initialized Cosmos DB Table client")
             
         except Exception as e:
             logger.error(f"Failed to initialize Cosmos DB Table client: {e}")
+            logger.error(f"Error type: {type(e).__name__}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             raise
     
     def _ensure_table_exists(self):
@@ -164,16 +173,20 @@ class CosmosTableClient:
             logger.error(f"Error upserting entity: {e}")
             raise
 
-# Initialize the table client
-try:
-    table_client = CosmosTableClient()
-    logger.info("Cosmos DB Table client initialized successfully")
-except Exception as e:
-    logger.error(f"Failed to initialize table client: {e}")
-    table_client = None
+# Initialize the table client lazily
+table_client = None
 
 def get_table_client():
-    """Get the table client instance"""
+    """Get the table client instance with lazy initialization"""
+    global table_client
+    
     if table_client is None:
-        raise CosmosTableClientError("Table client not initialized")
+        try:
+            logger.info("Initializing Cosmos DB Table client...")
+            table_client = CosmosTableClient()
+            logger.info("Cosmos DB Table client initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize table client: {e}")
+            raise CosmosTableClientError(f"Table client initialization failed: {e}")
+    
     return table_client
