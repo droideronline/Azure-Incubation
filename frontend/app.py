@@ -8,7 +8,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Constants
-BACKEND_URL = "http://48.216.155.232:8000"  # Change to your VM's public IP when deployed
+BACKEND_URL = "http://localhost:8000"  # This will be updated by setup script
 VIEW_BOOKS_PAGE = "📖 View Books"
 ADD_BOOK_PAGE = "➕ Add Book"
 MANAGE_BOOKS_PAGE = "🔧 Manage Books"
