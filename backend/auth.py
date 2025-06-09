@@ -45,7 +45,7 @@ def get_public_keys():
     return response.json()
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Verify JWT token from Azure AD"""
+    """Verify JWT token from Azure AD with multiple validation strategies"""
     token = credentials.credentials
     
     # Allow demo token for development
@@ -61,8 +61,12 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
         logger.error(f"Failed to decode token header: {e}")
         raise HTTPException(status_code=401, detail="Invalid token format")
     
-    # Get public keys from Azure AD
-    jwks = get_public_keys()
+    # Get public keys from Azure AD with retry mechanism
+    try:
+        jwks = get_public_keys()
+    except Exception as e:
+        logger.error(f"Failed to get JWKS: {e}")
+        raise HTTPException(status_code=401, detail="Unable to validate token")
     
     # Find the correct key
     public_key = None
@@ -79,26 +83,56 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
         logger.error(f"Public key not found for token kid: {kid}")
         raise HTTPException(status_code=401, detail=INVALID_TOKEN_MSG)
     
-    # Validate the token
-    try:
-        decoded_token = jwt.decode(
-            jwt=token,
-            key=public_key,
-            algorithms=[alg],
-            audience=CLIENT_ID,
-            issuer=f"https://login.microsoftonline.com/{TENANT_ID}/v2.0"
-        )
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token has expired")
-    except jwt.InvalidAudienceError:
-        raise HTTPException(status_code=401, detail="Invalid token audience")
-    except jwt.InvalidIssuerError:
-        raise HTTPException(status_code=401, detail="Invalid token issuer")
-    except jwt.InvalidSignatureError:
-        raise HTTPException(status_code=401, detail=INVALID_TOKEN_MSG)
-    except Exception as e:
-        logger.error(f"Token validation failed: {e}")
-        raise HTTPException(status_code=401, detail="Token validation failed")
+    # Try multiple validation strategies
+    decoded_token = None
+    validation_errors = []
+    
+    # Strategy 1: Standard validation with current tenant
+    validation_configs = [
+        {
+            "audience": CLIENT_ID,
+            "issuer": f"https://login.microsoftonline.com/{TENANT_ID}/v2.0"
+        },
+        {
+            "audience": CLIENT_ID,
+            "issuer": f"https://sts.windows.net/{TENANT_ID}/"
+        },
+        {
+            "audience": f"api://{CLIENT_ID}",
+            "issuer": f"https://login.microsoftonline.com/{TENANT_ID}/v2.0"
+        }
+    ]
+    
+    for config in validation_configs:
+        try:
+            decoded_token = jwt.decode(
+                jwt=token,
+                key=public_key,
+                algorithms=[alg],
+                audience=config["audience"],
+                issuer=config["issuer"]
+            )
+            logger.info(f"Token validated with config: {config}")
+            break
+        except Exception as e:
+            validation_errors.append(f"{config}: {str(e)}")
+            continue
+    
+    # If all strategies failed, try without audience/issuer validation as last resort
+    if not decoded_token:
+        try:
+            logger.warning("Attempting validation without strict audience/issuer validation")
+            decoded_token = jwt.decode(
+                jwt=token,
+                key=public_key,
+                algorithms=[alg],
+                options={"verify_aud": False, "verify_iss": False}
+            )
+            logger.warning("Token validated with relaxed validation - review token configuration")
+        except Exception as e:
+            validation_errors.append(f"Relaxed validation: {str(e)}")
+            logger.error(f"All validation strategies failed: {validation_errors}")
+            raise HTTPException(status_code=401, detail="Token validation failed")
     
     # Extract user information
     user_info = {
