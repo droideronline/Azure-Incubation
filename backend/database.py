@@ -72,7 +72,6 @@ class CosmosTableClient:
             import traceback
             logger.error(f"Full traceback: {traceback.format_exc()}")
             raise
-    
     def _fix_connection_string(self, original_conn_string):
         """
         Try to fix malformed connection strings
@@ -80,8 +79,54 @@ class CosmosTableClient:
         try:
             logger.info("Attempting to fix connection string format...")
             
+            # Check if it's just an account key (base64-like string, no delimiters)
+            if (len(original_conn_string) > 40 and 
+                not '=' in original_conn_string and 
+                not ';' in original_conn_string and 
+                not original_conn_string.startswith('https://')):
+                
+                logger.warning("Connection string appears to be just an account key")
+                
+                # Try to guess the account name from common patterns
+                # Since we don't have the account name, we need to make an educated guess
+                # or use a default pattern. Let's try some common approaches:
+                
+                # Option 1: Try to derive account name from the application context
+                possible_account_names = [
+                    "bookmanagement",
+                    "bookmanagementStorage", 
+                    "bookmanagementvm",
+                    "bookmanagementapp"
+                ]
+                
+                for account_name in possible_account_names:
+                    try:
+                        test_conn_string = (
+                            f"DefaultEndpointsProtocol=https;"
+                            f"AccountName={account_name};"
+                            f"AccountKey={original_conn_string};"
+                            f"TableEndpoint=https://{account_name}.table.core.windows.net/;"
+                        )
+                        
+                        logger.info(f"Trying account name: {account_name}")                        # Test if this connection string works
+                        test_client = TableServiceClient.from_connection_string(conn_str=test_conn_string)
+                        # If we get here without exception, the format is valid
+                        logger.info(f"Successfully constructed connection string with account name: {account_name}")
+                        return test_conn_string
+                        
+                    except Exception as test_error:
+                        logger.debug(f"Account name {account_name} failed: {test_error}")
+                        continue
+                
+                # If none of the guesses worked, raise an error with helpful information
+                raise ValueError(
+                    f"Connection string appears to be just an account key. "
+                    f"Please update the Key Vault secret 'cosmos-connection-string' with the full connection string format: "
+                    f"DefaultEndpointsProtocol=https;AccountName=<YOUR_ACCOUNT_NAME>;AccountKey={original_conn_string[:20]}...;TableEndpoint=https://<YOUR_ACCOUNT_NAME>.table.core.windows.net/;"
+                )
+            
             # If it's just a URL or account name, construct proper connection string
-            if original_conn_string.startswith('https://') and '.table.core.windows.net' in original_conn_string:
+            elif original_conn_string.startswith('https://') and '.table.core.windows.net' in original_conn_string:
                 # Extract account name from URL
                 account_name = original_conn_string.split('//')[1].split('.')[0]
                 logger.warning(f"Connection string appears to be just a URL. Account name: {account_name}")
@@ -90,7 +135,7 @@ class CosmosTableClient:
                 raise ValueError("Connection string is missing account key. Please provide full connection string.")
             
             # If it contains account info but wrong format, try to parse and reconstruct
-            if '=' in original_conn_string and ';' in original_conn_string:
+            elif '=' in original_conn_string and ';' in original_conn_string:
                 # Parse key-value pairs
                 parts = {}
                 for part in original_conn_string.split(';'):
