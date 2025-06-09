@@ -30,14 +30,23 @@ class CosmosTableClient:
             self.connection_string = get_cosmos_connection_string()
             self.table_name = "books"
             
-            # Validate connection string
-            if not self.connection_string:
+            # Log connection string format (masked for security)
+            if self.connection_string:
+                # Show first 20 chars and structure to debug format issues
+                conn_preview = self.connection_string[:50] + "..." if len(self.connection_string) > 50 else self.connection_string
+                logger.info(f"Connection string preview: {conn_preview}")
+                
+                # Check if it contains required fields
+                required_fields = ['accountname', 'accountkey', 'DefaultEndpointsProtocol']
+                missing_fields = [field for field in required_fields if field.lower() not in self.connection_string.lower()]
+                if missing_fields:
+                    logger.error(f"Connection string missing required fields: {missing_fields}")
+                    
+                    # Try to construct a proper connection string if we can extract components
+                    self.connection_string = self._fix_connection_string(self.connection_string)
+            else:
                 logger.error("Connection string is empty")
                 raise ValueError("Empty connection string retrieved from Key Vault")
-            
-            # Log connection string format (masked for security)
-            conn_preview = self.connection_string[:50] + "..." if len(self.connection_string) > 50 else self.connection_string
-            logger.info(f"Connection string preview: {conn_preview}")
             
             logger.info("Creating TableServiceClient...")
             # Initialize TableServiceClient with connection string
@@ -63,6 +72,99 @@ class CosmosTableClient:
             import traceback
             logger.error(f"Full traceback: {traceback.format_exc()}")
             raise
+    
+    def _fix_connection_string(self, original_conn_string):
+        """
+        Try to fix malformed connection strings
+        """
+        try:
+            logger.info("Attempting to fix connection string format...")
+            
+            # Check if it's just an account key (base64-like string, no delimiters)            if (len(original_conn_string) > 40 and 
+                '=' not in original_conn_string and 
+                ';' not in original_conn_string and 
+                not original_conn_string.startswith('https://')):
+                
+                logger.warning("Connection string appears to be just an account key")
+                
+                # Try to guess the account name from common patterns
+                # Since we don't have the account name, we need to make an educated guess
+                # or use a default pattern. Let's try some common approaches:
+                
+                # Option 1: Try to derive account name from the application context
+                possible_account_names = [
+                    "bookmanagement",
+                    "bookmanagmentvm",
+                    "bookmanagementvm", 
+                    "bookmanagementapp",
+                    "bookrentalvm",
+                    "bookrental"
+                ]
+                
+                for account_name in possible_account_names:
+                    try:
+                        test_conn_string = (
+                            f"DefaultEndpointsProtocol=https;"
+                            f"AccountName={account_name};"
+                            f"AccountKey={original_conn_string};"
+                            f"TableEndpoint=https://{account_name}.table.core.windows.net/;"
+                        )
+                        logger.info(f"Trying account name: {account_name}")
+                        
+                        # Test if this connection string works
+                        test_client = TableServiceClient.from_connection_string(conn_str=test_conn_string)
+                        # If we get here without exception, the format is valid
+                        logger.info(f"Successfully constructed connection string with account name: {account_name}")
+                        return test_conn_string
+                        
+                    except Exception as test_error:
+                        logger.debug(f"Account name {account_name} failed: {test_error}")
+                        continue
+                
+                # If none of the guesses worked, raise an error with helpful information
+                raise ValueError(
+                    f"Connection string appears to be just an account key. "
+                    f"Please update the Key Vault secret 'cosmos-connection-string' with the full connection string format: "
+                    f"DefaultEndpointsProtocol=https;AccountName=<YOUR_ACCOUNT_NAME>;AccountKey={original_conn_string[:20]}...;TableEndpoint=https://<YOUR_ACCOUNT_NAME>.table.core.windows.net/;"
+                )
+            
+            # If it's just a URL or account name, construct proper connection string
+            elif original_conn_string.startswith('https://') and '.table.core.windows.net' in original_conn_string:
+                # Extract account name from URL
+                account_name = original_conn_string.split('//')[1].split('.')[0]
+                logger.warning(f"Connection string appears to be just a URL. Account name: {account_name}")
+                
+                # This needs an account key - we can't proceed without it
+                raise ValueError("Connection string is missing account key. Please provide full connection string.")
+            
+            # If it contains account info but wrong format, try to parse and reconstruct
+            elif '=' in original_conn_string and ';' in original_conn_string:
+                # Parse key-value pairs
+                parts = {}
+                for part in original_conn_string.split(';'):
+                    if '=' in part:
+                        key, value = part.split('=', 1)
+                        parts[key.strip().lower()] = value.strip()
+                
+                # Check if we have the required components
+                if 'accountname' in parts and 'accountkey' in parts:
+                    # Reconstruct proper connection string
+                    fixed_conn_string = (
+                        f"DefaultEndpointsProtocol=https;"
+                        f"AccountName={parts['accountname']};"
+                        f"AccountKey={parts['accountkey']};"
+                        f"TableEndpoint=https://{parts['accountname']}.table.core.windows.net/;"
+                    )
+                    logger.info("Successfully reconstructed connection string")
+                    return fixed_conn_string
+            
+            # If we can't fix it, return original and let it fail
+            logger.warning("Could not fix connection string format, using original")
+            return original_conn_string
+            
+        except Exception as fix_error:
+            logger.error(f"Error fixing connection string: {fix_error}")
+            return original_conn_string
     
     def _ensure_table_exists(self):
         """Create the table if it doesn't exist"""
