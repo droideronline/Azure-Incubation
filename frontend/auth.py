@@ -89,6 +89,10 @@ def logout():
         del st.session_state["access_token"]
     if "user_info" in st.session_state:
         del st.session_state["user_info"]
+    # Clear any other auth-related session state
+    auth_keys = [key for key in st.session_state.keys() if key.startswith(('auth_', 'azure_'))]
+    for key in auth_keys:
+        del st.session_state[key]
 
 def get_user_profile(access_token):
     """

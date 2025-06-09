@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 class Book(BaseModel):
     """
@@ -24,9 +24,8 @@ class Book(BaseModel):
         # Auto-generate RowKey if not provided
         if not data.get('RowKey'):
             data['RowKey'] = str(uuid.uuid4())
-        
-        # Set timestamps
-        current_time = datetime.utcnow().isoformat()
+          # Set timestamps
+        current_time = datetime.now(timezone.utc).isoformat()
         if not data.get('created_at'):
             data['created_at'] = current_time
         data['updated_at'] = current_time

@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from .routes import book_router
-from .auth import validate_token
+from .auth import verify_token
 import logging
 
 # Initialize logger
@@ -24,7 +24,7 @@ app.add_middleware(
 )
 
 # Include the book management routes with authentication
-app.include_router(book_router, dependencies=[Depends(validate_token)])
+app.include_router(book_router, dependencies=[Depends(verify_token)])
 
 @app.get("/")
 def read_root():

@@ -7,8 +7,12 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# FastAPI backend URL - Update this with your VM's public IP
+# Constants
 BACKEND_URL = "http://48.216.155.232:8000"  # Change to your VM's public IP when deployed
+VIEW_BOOKS_PAGE = "📖 View Books"
+ADD_BOOK_PAGE = "➕ Add Book"
+MANAGE_BOOKS_PAGE = "🔧 Manage Books"
+ABOUT_PAGE = "ℹ️ About"
 
 # Configure Streamlit page
 st.set_page_config(
@@ -18,58 +22,61 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-def main():
-    st.title("📚 Book Management Application")
-    st.markdown("*Powered by Azure Services: VM, Cosmos DB, Key Vault, and Azure AD*")
-      # Authentication check
-    if not check_authentication():
-        st.subheader("🔐 Authentication Required")
+def handle_demo_login():
+    """Handle demo login process"""
+    if st.button("🚀 Demo Login", key="demo_login_button"):
+        token = authenticate_user_demo()
+        st.session_state["access_token"] = token
+        st.session_state["user_info"] = {"name": "Demo User", "email": "demo@example.com"}
+        st.rerun()
 
-        # Offer Demo and Production login options
-        col1, col2 = st.columns(2)
-        with col1:
-            st.info("**Demo Mode**")
-            if st.button("🚀 Demo Login", key="demo_login_button"):
-                token = authenticate_user_demo()
-                st.session_state["access_token"] = token
-                st.session_state["user_info"] = {"name": "Demo User", "email": "demo@example.com"}
-                st.rerun()
-        
-        with col2:
-            st.info("**Production Mode**")
-            auth_url = get_auth_url()
-            st.markdown(f"**Step 1:** [Click here to login with Azure AD]({auth_url})")
-            st.markdown("**Step 2:** Copy the authorization code from the URL after authentication")
-            st.markdown("**Step 3:** Paste the code below and click Submit")
-            
-            auth_code = st.text_input("Authorization code:", key="auth_code_input", placeholder="Paste your authorization code here")
-            
-            if st.button("Submit Code", key="submit_auth_code"):
-                if auth_code:
-                    with st.spinner("Authenticating..."):
-                        token = exchange_code_for_token(auth_code)
-                        if token:
-                            st.session_state["access_token"] = token
-                            profile = get_user_profile(token)
-                            if profile:
-                                name = profile.get("displayName") or profile.get("userPrincipalName", "User")
-                                email = profile.get("mail") or profile.get("userPrincipalName", "")
-                                st.session_state["user_info"] = {"name": name, "email": email}
-                                st.success(f"✅ Welcome, {name}!")
-                                st.rerun()
-                            else:
-                                st.error("❌ Failed to fetch user profile after token exchange.")
-                        else:
-                            st.error("❌ Token exchange failed. Please check your authorization code and try again.")
-                else:
-                    st.warning("⚠️ Please enter an authorization code.")
-        
-        return
+def handle_production_login():
+    """Handle production Azure AD login process"""
+    auth_url = get_auth_url()
+    st.markdown(f"**Step 1:** [Click here to login with Azure AD]({auth_url})")
+    st.markdown("**Step 2:** Copy the authorization code from the URL after authentication")
+    st.markdown("**Step 3:** Paste the code below and click Submit")
     
-    # User is authenticated - show the main application
+    auth_code = st.text_input("Authorization code:", key="auth_code_input", placeholder="Paste your authorization code here")
+    
+    if st.button("Submit Code", key="submit_auth_code"):
+        if auth_code:
+            with st.spinner("Authenticating..."):
+                token = exchange_code_for_token(auth_code)
+                if token:
+                    st.session_state["access_token"] = token
+                    profile = get_user_profile(token)
+                    if profile:
+                        name = profile.get("displayName") or profile.get("userPrincipalName", "User")
+                        email = profile.get("mail") or profile.get("userPrincipalName", "")
+                        st.session_state["user_info"] = {"name": name, "email": email}
+                        st.success(f"✅ Welcome, {name}!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Failed to fetch user profile after token exchange.")
+                else:
+                    st.error("❌ Token exchange failed. Please check your authorization code and try again.")
+        else:
+            st.warning("⚠️ Please enter an authorization code.")
+
+def show_authentication_page():
+    """Show authentication page with demo and production options"""
+    st.subheader("🔐 Authentication Required")
+
+    # Offer Demo and Production login options
+    col1, col2 = st.columns(2)
+    with col1:
+        st.info("**Demo Mode**")
+        handle_demo_login()
+    
+    with col2:
+        st.info("**Production Mode**")
+        handle_production_login()
+
+def show_sidebar_navigation():
+    """Show sidebar with user info and navigation"""
     user_info = st.session_state.get("user_info", {})
     
-    # Sidebar
     with st.sidebar:
         st.success(f"👋 Welcome, {user_info.get('name', 'User')}!")
         
@@ -82,17 +89,31 @@ def main():
         # Navigation menu
         page = st.selectbox(
             "📋 Navigation",
-            ["📖 View Books", "➕ Add Book", "🔧 Manage Books", "ℹ️ About"]
+            [VIEW_BOOKS_PAGE, ADD_BOOK_PAGE, MANAGE_BOOKS_PAGE, ABOUT_PAGE]
         )
     
+    return page
+
+def main():
+    st.title("📚 Book Management Application")
+    st.markdown("*Powered by Azure Services: VM, Cosmos DB, Key Vault, and Azure AD*")
+    
+    # Authentication check
+    if not check_authentication():
+        show_authentication_page()
+        return
+    
+    # User is authenticated - show the main application
+    page = show_sidebar_navigation()
+    
     # Main content area
-    if page == "📖 View Books":
+    if page == VIEW_BOOKS_PAGE:
         show_books_page()
-    elif page == "➕ Add Book":
+    elif page == ADD_BOOK_PAGE:
         show_add_book_page()
-    elif page == "🔧 Manage Books":
+    elif page == MANAGE_BOOKS_PAGE:
         show_manage_books_page()
-    elif page == "ℹ️ About":
+    elif page == ABOUT_PAGE:
         show_about_page()
 
 def show_books_page():
@@ -162,6 +183,57 @@ def show_add_book_page():
             else:
                 st.warning("⚠️ Please fill in all required fields (Title and Author)")
 
+def handle_book_edit(book, book_id):
+    """Handle book editing functionality"""
+    with st.form("edit_book_form"):
+        title = st.text_input("Title", value=book.get("title", ""))
+        author = st.text_input("Author", value=book.get("author", ""))
+        description = st.text_area("Description", value=book.get("description", ""))
+        published_date = st.date_input("Published Date")
+        
+        if st.form_submit_button("💾 Update Book"):
+            if title and author:
+                try:
+                    updated_book_data = {
+                        "title": title,
+                        "author": author,
+                        "description": description,
+                        "published_date": str(published_date)
+                    }
+                    
+                    token = st.session_state.get("access_token")
+                    success = update_book(BACKEND_URL, token, book_id, updated_book_data)
+                    
+                    if success:
+                        st.success("✅ Book updated successfully!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Failed to update book")
+                        
+                except Exception as e:
+                    st.error(f"❌ Error updating book: {e}")
+                    logger.error(f"Error in update_book: {e}")
+            else:
+                st.warning("⚠️ Please fill in all required fields (Title and Author)")
+
+def handle_book_delete(book_id):
+    """Handle book deletion functionality"""
+    st.warning("⚠️ This action cannot be undone!")
+    if st.button("🗑️ Delete Book", type="secondary", key=f"delete_{book_id}"):
+        try:
+            token = st.session_state.get("access_token")
+            success = delete_book(BACKEND_URL, token, book_id)
+            
+            if success:
+                st.success("✅ Book deleted successfully!")
+                st.rerun()
+            else:
+                st.error("❌ Failed to delete book")
+                
+        except Exception as e:
+            st.error(f"❌ Error deleting book: {e}")
+            logger.error(f"Error in delete_book: {e}")
+
 def show_manage_books_page():
     st.header("🔧 Manage Books")
     
@@ -181,21 +253,10 @@ def show_manage_books_page():
                     tab1, tab2 = st.tabs(["✏️ Edit", "🗑️ Delete"])
                     
                     with tab1:
-                        with st.form("edit_book_form"):
-                            title = st.text_input("Title", value=book.get("title", ""))
-                            author = st.text_input("Author", value=book.get("author", ""))
-                            description = st.text_area("Description", value=book.get("description", ""))
-                            published_date = st.date_input("Published Date")
-                            
-                            if st.form_submit_button("💾 Update Book"):
-                                # Implementation for update
-                                st.info("Update functionality - coming soon!")
+                        handle_book_edit(book, book_id)
                     
                     with tab2:
-                        st.warning("⚠️ This action cannot be undone!")
-                        if st.button("🗑️ Delete Book", type="secondary"):
-                            # Implementation for delete
-                            st.info("Delete functionality - coming soon!")
+                        handle_book_delete(book_id)
         else:
             st.info("📚 No books available to manage")
             

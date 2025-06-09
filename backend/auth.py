@@ -1,9 +1,12 @@
 from msal import ConfidentialClientApplication
 from fastapi import HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import jwt
+import requests
 import sys
 import os
 import logging
+from datetime import datetime, timezone
 
 # Add parent directory to path to import azure_keyvault
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -26,6 +29,7 @@ except Exception as e:
 
 AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
 SCOPE = ["User.Read"]
+JWKS_URL = f"https://login.microsoftonline.com/{TENANT_ID}/discovery/v2.0/keys"
 
 # Initialize MSAL app
 app = ConfidentialClientApplication(
@@ -37,28 +41,95 @@ app = ConfidentialClientApplication(
 # Security scheme
 security = HTTPBearer()
 
-def validate_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+# Constants
+TOKEN_EXPIRED_MSG = "Token has expired"
+
+def get_public_keys():
     """
-    Validate JWT token from Azure AD
+    Get the public keys from Azure AD for JWT validation
+    """
+    try:
+        response = requests.get(JWKS_URL)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        logger.error(f"Failed to get public keys: {e}")
+        return None
+
+def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """
+    Verify JWT token from Azure AD using proper validation
     """
     try:
         token = credentials.credentials
         
-        # In a production environment, you would validate the JWT token here
-        # For this demo, we'll do a basic validation
-        if not token or token == "demo-token":
-            logger.warning("Invalid or demo token used")
-            return {"user": "demo-user", "roles": ["user"]}
+        # Allow demo token for development
+        if token == "demo-token":
+            logger.info("Demo token accepted")
+            return {"user": "demo-user", "roles": ["user"], "email": "demo@example.com"}
         
-        # Here you would normally:
-        # 1. Decode and validate the JWT token
-        # 2. Check token expiration
-        # 3. Verify the token signature
-        # 4. Extract user information
+        # Get the token header to find the key ID
+        try:
+            unverified_header = jwt.get_unverified_header(token)
+            kid = unverified_header.get('kid')
+        except Exception as e:
+            logger.error(f"Failed to decode token header: {e}")
+            raise HTTPException(status_code=401, detail="Invalid token format")
         
-        logger.info("Token validated successfully")
-        return {"user": "authenticated-user", "roles": ["user"]}
+        # Get public keys from Azure AD
+        jwks = get_public_keys()
+        if not jwks:
+            logger.error("Failed to retrieve public keys")
+            raise HTTPException(status_code=500, detail="Authentication service unavailable")
         
+        # Find the correct key
+        public_key = None
+        for key in jwks.get('keys', []):
+            if key.get('kid') == kid:
+                # Convert JWK to PEM format for validation
+                public_key = jwt.algorithms.RSAAlgorithm.from_jwk(key)
+                break
+        
+        if not public_key:
+            logger.error("Public key not found for token")
+            raise HTTPException(status_code=401, detail="Invalid token signature")
+        
+        # Verify and decode the token
+        try:
+            decoded_token = jwt.decode(
+                token,
+                public_key,
+                algorithms=['RS256'],
+                audience=CLIENT_ID,  # The token should be issued for our app
+                issuer=f"https://login.microsoftonline.com/{TENANT_ID}/v2.0"
+            )
+            
+            # Check token expiration
+            exp = decoded_token.get('exp')
+            if exp and datetime.fromtimestamp(exp, tz=timezone.utc) < datetime.now(timezone.utc):
+                raise HTTPException(status_code=401, detail=TOKEN_EXPIRED_MSG)
+            
+            # Extract user information
+            user_info = {
+                "user": decoded_token.get('name', decoded_token.get('preferred_username', 'unknown')),
+                "email": decoded_token.get('email', decoded_token.get('preferred_username', '')),
+                "roles": ["user"],  # You can extract roles from the token if configured
+                "sub": decoded_token.get('sub'),
+                "aud": decoded_token.get('aud')
+            }
+            
+            logger.info(f"Token validated successfully for user: {user_info['user']}")
+            return user_info
+            
+        except jwt.ExpiredSignatureError:
+            logger.error("Token has expired")
+            raise HTTPException(status_code=401, detail=TOKEN_EXPIRED_MSG)
+        except jwt.InvalidTokenError as e:
+            logger.error(f"Invalid token: {e}")
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Token validation failed: {e}")
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
@@ -98,3 +169,6 @@ def exchange_code_for_token(code: str):
     except Exception as e:
         logger.error(f"Token exchange failed: {e}")
         raise HTTPException(status_code=500, detail="Token exchange failed")
+
+# Alias for backward compatibility
+validate_token = verify_token
