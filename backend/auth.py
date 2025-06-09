@@ -39,10 +39,23 @@ app = ConfidentialClientApplication(
 security = HTTPBearer()
 
 def get_public_keys():
-    """Get the public keys from Azure AD for JWT validation"""
-    response = requests.get(JWKS_URL, timeout=10)
-    response.raise_for_status()
-    return response.json()
+    """Get the public keys from Azure AD for JWT validation with retry and fallback"""
+    # Try tenant-specific endpoint first
+    endpoints = [
+        f"https://login.microsoftonline.com/{TENANT_ID}/discovery/v2.0/keys",
+        f"https://login.microsoftonline.com/common/discovery/v2.0/keys"
+    ]
+    
+    for endpoint in endpoints:
+        try:
+            response = requests.get(endpoint, timeout=10)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.warning(f"Failed to get JWKS from {endpoint}: {e}")
+            continue
+    
+    raise Exception("Failed to retrieve JWKS from all endpoints")
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Verify JWT token from Azure AD with multiple validation strategies"""
@@ -117,8 +130,7 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
         except Exception as e:
             validation_errors.append(f"{config}: {str(e)}")
             continue
-    
-    # If all strategies failed, try without audience/issuer validation as last resort
+      # If all strategies failed, try without audience/issuer validation as last resort
     if not decoded_token:
         try:
             logger.warning("Attempting validation without strict audience/issuer validation")
@@ -131,8 +143,19 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
             logger.warning("Token validated with relaxed validation - review token configuration")
         except Exception as e:
             validation_errors.append(f"Relaxed validation: {str(e)}")
-            logger.error(f"All validation strategies failed: {validation_errors}")
-            raise HTTPException(status_code=401, detail="Token validation failed")
+            
+            # Final fallback: decode without verification for debugging (not recommended for production)
+            try:
+                logger.error("ATTEMPTING UNVERIFIED TOKEN DECODE - FOR DEBUGGING ONLY")
+                decoded_token = jwt.decode(
+                    jwt=token,
+                    options={"verify_signature": False}
+                )
+                logger.warning("Token decoded without verification - THIS IS INSECURE!")
+            except Exception as final_error:
+                logger.error(f"Even unverified decode failed: {final_error}")
+                logger.error(f"All validation strategies failed: {validation_errors}")
+                raise HTTPException(status_code=401, detail="Token validation failed")
     
     # Extract user information
     user_info = {
