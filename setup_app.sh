@@ -24,9 +24,9 @@ print_info() {
 print_info "Updating system packages..."
 sudo apt update && sudo apt upgrade -y
 
-# Install Python 3.11 and pip
+# Install Python and pip
 print_info "Installing Python and dependencies..."
-sudo apt install -y python3.11 python3.11-pip python3.11-venv
+sudo apt install -y python3 python3-pip python3-venv
 
 # Create application directory
 APP_DIR="/opt/bookmanagement"
