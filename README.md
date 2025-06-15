@@ -24,7 +24,7 @@ A comprehensive Book Management application that demonstrates the integration of
          ┌─────────────────────────┐
          │   Azure Virtual Machine │
          │   (Ubuntu 22.04 LTS)    │
-         │   Standard_B1s          │
+         │   (Direct App Access)   │
          └─────────────────────────┘
 ```
 
@@ -32,8 +32,8 @@ A comprehensive Book Management application that demonstrates the integration of
 
 ### 1. **Azure Virtual Machine**
 - **Purpose**: Hosting the application
-- **Configuration**: Ubuntu 22.04 LTS, Standard_B1s (1 vCPU, 1 GiB RAM)
-- **Network**: Configured with NSG allowing ports 22, 80, 443, 8000, 8501
+- **Configuration**: Ubuntu 22.04 LTS, Standard_B1s (1 vCPU, 1 GiB RAM) or similar
+- **Network**: Configured with NSG allowing ports 22, 8000, 8501
 - **Features**: Managed Identity for secure Azure service access
 
 ### 2. **Azure Cosmos DB (Table API)**
@@ -55,6 +55,27 @@ A comprehensive Book Management application that demonstrates the integration of
 - **Configuration**: Single-tenant application with delegated permissions
 - **Features**: OAuth 2.0 flow, JWT token validation
 
+## ✨ Features
+
+### Book Management
+- **Create Books**: Add new books with title, author, description, and publication date
+- **View Books**: Browse all books in a clean, organized interface
+- **Update Books**: Edit existing book information
+- **Delete Books**: Remove books from the system
+- **Search & Filter**: Find books quickly using various criteria
+
+### Authentication & Security
+- **Azure AD Integration**: Secure login using Microsoft Azure Active Directory
+- **JWT Token Validation**: Robust API security with token-based authentication
+- **Role-based Access**: Authenticated users can perform all CRUD operations
+- **Secure Secret Management**: All sensitive data stored in Azure Key Vault
+
+### User Experience
+- **Responsive UI**: Modern Streamlit interface that works on desktop and mobile
+- **Real-time Updates**: Changes reflected immediately across the application
+- **Error Handling**: Comprehensive error messages and graceful failure handling
+- **API Documentation**: Interactive Swagger/OpenAPI documentation at `/docs`
+
 ## 🛠️ Technology Stack
 
 ### Backend (FastAPI)
@@ -71,9 +92,8 @@ A comprehensive Book Management application that demonstrates the integration of
 
 ### Infrastructure
 - **Hosting**: Azure Virtual Machine (Ubuntu 22.04 LTS)
-- **Reverse Proxy**: Nginx for routing and load balancing
-- **Process Management**: Systemd services for auto-restart
-- **Security**: UFW firewall, HTTPS ready
+- **Process Management**: Systemd services for auto-restart capability
+- **Security**: UFW firewall configuration, HTTPS ready
 
 ## 📁 Project Structure
 
@@ -91,8 +111,7 @@ Book Rental Management Azure/
 │   └── utils.py                # API utility functions
 ├── azure_keyvault.py           # Azure Key Vault integration
 ├── requirements.txt            # Python dependencies
-├── deploy_vm.ps1              # PowerShell deployment script
-├── setup_app.sh               # Linux setup script
+├── setup_app.sh               # Linux setup and deployment script
 └── README.md                  # Project documentation
 ```
 
@@ -101,52 +120,58 @@ Book Rental Management Azure/
 ### Prerequisites
 - Azure subscription with appropriate permissions
 - Azure CLI installed and configured
-- PowerShell (for Windows deployment)
+- Access to an Azure Virtual Machine (Ubuntu 22.04 LTS or similar)
 
-### Step 1: Deploy Azure Infrastructure
+### Step 1: Set Up Azure Infrastructure
 
-1. **Run the PowerShell deployment script**:
-   ```powershell
-   .\deploy_vm.ps1
-   ```
+You'll need to manually create the following Azure resources:
 
-2. **The script will create**:
-   - Resource Group: `BookManagementRG`
-   - Virtual Machine: `BookManagementVM`
-   - Network Security Group with required ports
-   - SSH key pair for secure access
+1. **Azure Virtual Machine**:
+   - Ubuntu 22.04 LTS
+   - Standard_B1s (1 vCPU, 1 GiB RAM) or similar
+   - Network Security Group allowing ports 22, 8000, 8501
+   - Enable System Managed Identity
 
-### Step 2: Configure Azure Services
-
-1. **Azure Cosmos DB**:
+2. **Azure Cosmos DB**:
    - Create account with Table API
    - Create `books` table
-   - Copy connection string to Key Vault
+   - Copy connection string for Key Vault
 
-2. **Azure Key Vault**:
-   - Store all required secrets
+3. **Azure Key Vault**:
+   - Store all required secrets (see configuration section)
    - Configure access policies for VM's Managed Identity
 
-3. **Azure Active Directory**:
+4. **Azure Active Directory**:
    - Register application
    - Configure authentication settings
    - Set API permissions
 
-### Step 3: Deploy Application
+### Step 2: Deploy Application
 
 1. **Connect to VM**:
    ```bash
-   ssh -i ~/.ssh/id_rsa_bookmanagement azureuser@<VM_PUBLIC_IP>
+   ssh azureuser@<VM_PUBLIC_IP>
    ```
 
-2. **Upload application code** to `/opt/bookmanagement`
+2. **Upload application code** to the VM (all files from this repository)
 
-3. **Run setup script**:
+3. **Run the setup script**:
    ```bash
    sudo bash setup_app.sh
    ```
 
-### Step 4: Access Application
+4. **Configure backend URL** when prompted by the setup script
+
+#### What the Setup Script Does:
+- Installs Python 3 and pip
+- Moves all application files to `/opt/bookmanagement`
+- Installs Python dependencies from `requirements.txt`
+- Prompts for backend URL configuration and updates the frontend
+- Creates systemd service files for both backend and frontend
+- Starts and enables the services for automatic startup
+- Configures UFW firewall to allow required ports (22, 8000, 8501)
+
+### Step 3: Access Application
 
 - **Streamlit Frontend**: `http://<VM_PUBLIC_IP>:8501`
 - **FastAPI Backend**: `http://<VM_PUBLIC_IP>:8000`
@@ -154,13 +179,19 @@ Book Rental Management Azure/
 
 ## 🔧 Configuration
 
-### Environment Variables
-Set in `/etc/environment` on the VM:
-```bash
-PYTHONPATH="/opt/bookmanagement"
-AZURE_CLIENT_ID="your-client-id"
-AZURE_CLIENT_SECRET="your-client-secret"
-AZURE_TENANT_ID="your-tenant-id"
+### Azure Key Vault Secrets
+Store the following secrets in your Azure Key Vault:
+```
+cosmos-connection-string    # Your Cosmos DB connection string
+azure-client-id            # Azure AD application client ID  
+azure-client-secret        # Azure AD application secret
+azure-tenant-id            # Azure AD tenant ID
+```
+
+### Backend URL Configuration
+The `setup_app.sh` script will prompt you to set the backend URL that the frontend uses to communicate with the API. This should typically be:
+```
+http://<VM_PUBLIC_IP>:8000
 ```
 
 ### Service Management
@@ -235,20 +266,21 @@ This project demonstrates:
    ```bash
    pip install -r requirements.txt
    ```
-3. **Set environment variables**
-4. **Run services**:
+3. **Configure Azure services** (Key Vault, Cosmos DB, Azure AD)
+4. **Set up local environment** with access to Azure resources
+5. **Run services**:
    ```bash
    # Backend
    uvicorn backend.main:app --reload --port 8000
    
-   # Frontend
+   # Frontend (in another terminal)
    streamlit run frontend/app.py --server.port 8501
    ```
 
 ### Testing
 
-- **Backend**: `http://localhost:8000/docs`
-- **Frontend**: `http://localhost:8501`
+- **Backend API**: `http://localhost:8000/docs`
+- **Frontend App**: `http://localhost:8501`
 
 ## 📊 Monitoring and Logging
 
@@ -273,26 +305,37 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ### Common Issues
 
 1. **Authentication Failures**:
-   - Verify Azure AD configuration
-   - Check Key Vault access policies
-   - Ensure Managed Identity is enabled
+   - Verify Azure AD application configuration
+   - Check Key Vault access policies for VM's Managed Identity
+   - Ensure all required secrets are stored in Key Vault
+   - Verify the Azure AD tenant ID and client ID
 
 2. **Database Connection Issues**:
-   - Verify Cosmos DB connection string
-   - Check network connectivity
-   - Validate Key Vault secrets
+   - Verify Cosmos DB connection string in Key Vault
+   - Check network connectivity from VM to Cosmos DB
+   - Ensure the `books` table exists in Cosmos DB
+   - Validate Key Vault secrets format
 
 3. **Service Start Failures**:
    - Check service logs: `sudo journalctl -u bookmanagement-api -f`
-   - Verify file permissions
-   - Ensure all dependencies are installed
+   - Check frontend logs: `sudo journalctl -u bookmanagement-frontend -f`
+   - Verify file permissions in `/opt/bookmanagement`
+   - Ensure all dependencies are installed: `pip list`
+   - Check if ports 8000 and 8501 are available
+
+4. **Frontend Cannot Connect to Backend**:
+   - Verify the backend URL configuration in `frontend/app.py`
+   - Check if backend service is running: `sudo systemctl status bookmanagement-api`
+   - Test backend directly: `curl http://localhost:8000/health`
+   - Ensure firewall allows port 8000: `sudo ufw status`
 
 ### Support
 
 For issues and questions:
-- Check the logs first
-- Review Azure service configurations
+- Check the service logs first using `journalctl`
+- Review Azure service configurations in the portal
 - Ensure all prerequisites are met
+- Verify network security group rules allow required ports
 
 ---
 
