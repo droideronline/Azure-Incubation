@@ -87,6 +87,7 @@ Type=simple
 User=$USER
 WorkingDirectory=$APP_DIR
 Environment=PATH=$APP_DIR/venv/bin
+Environment=PYTHONPATH=$APP_DIR:$APP_DIR/frontend:$APP_DIR/backend
 ExecStart=$APP_DIR/venv/bin/uvicorn backend.main:app --host 0.0.0.0 --port 8000
 Restart=always
 
@@ -106,6 +107,7 @@ Type=simple
 User=$USER
 WorkingDirectory=$APP_DIR
 Environment=PATH=$APP_DIR/venv/bin
+Environment=PYTHONPATH=$APP_DIR:$APP_DIR/frontend:$APP_DIR/backend
 ExecStart=$APP_DIR/venv/bin/streamlit run frontend/app.py --server.port 8501 --server.address 0.0.0.0
 Restart=always
 
