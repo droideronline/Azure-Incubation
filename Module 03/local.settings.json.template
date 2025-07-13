@@ -1,0 +1,13 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "COSMOS_CONNECTION_STRING": "AccountEndpoint=https://your-cosmosdb.documents.azure.com:443/;AccountKey=your-cosmos-key",
+    "COSMOS_ENDPOINT": "https://your-cosmosdb.documents.azure.com:443/",
+    "STORAGE_CONNECTION_STRING": "DefaultEndpointsProtocol=https;AccountName=your-storage;AccountKey=your-key",
+    "COSMOS_DATABASE_NAME": "MediaMetadataDB",
+    "COSMOS_CONTAINER_NAME": "media-files",
+    "KEY_VAULT_URL": "https://your-keyvault.vault.azure.net/"
+  }
+}
