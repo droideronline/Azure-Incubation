@@ -1,5 +1,5 @@
-// Configuration - Update with your Azure Function App URL
-const API_BASE_URL = 'https://ediametadata-python-functions-ckgvc8btfvarchd3.canadacentral-01.azurewebsites.net/api';
+// Configuration - Update with your Azure API Management URL
+const API_BASE_URL = 'https://your-api-management-name.azure-api.net/your-api-path';
 
 // Global variables
 let currentFiles = [];

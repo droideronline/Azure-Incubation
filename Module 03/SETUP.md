@@ -2,7 +2,10 @@
 
 ## Prerequisites
 
-Before starting, ensure you have:
+Before starting, ensure you 2. **Update API_BASE_URL in static_website/app.js:**
+   - Replace the placeholder URL with your API Management URL
+   - Example: `https://your-api-management-name.azure-api.net/your-api-path`
+   - The path after the domain should match your API path in API Management:
 
 1. **Azure CLI** installed and logged in
 2. **Azure Functions Core Tools** v4 installed
@@ -43,7 +46,7 @@ az account set --subscription "your-subscription-id"
 
 ## Deployment Steps
 
-### 1. Manual Azure Resource Creation
+### 1. Create Azure Resources
 
 Follow the step-by-step guide in the README.md to create:
 - Resource Group
@@ -51,25 +54,9 @@ Follow the step-by-step guide in the README.md to create:
 - Cosmos DB NoSQL account with database and container
 - Key Vault with secrets
 - Function App with managed identity
+- API Management instance (optional but recommended)
 
-### 2. Automated Deployment (Alternative)
-
-For automated deployment, run the deployment script:
-
-**Windows PowerShell:**
-```powershell
-cd "Module 03"
-.\deploy.ps1
-```
-
-**Linux/macOS:**
-```bash
-cd "Module 03"
-chmod +x deploy.sh
-./deploy.sh
-```
-
-### 3. Deploy Function App Code
+### 2. Deploy Function App Code
 
 From the Module 03 directory:
 
@@ -84,7 +71,7 @@ pip install -r requirements.txt
 func azure functionapp publish your-function-app-name --python
 ```
 
-### 4. Upload Static Website
+### 3. Upload Static Website
 
 ```bash
 # Upload static website files to $web container
@@ -94,11 +81,73 @@ az storage blob upload-batch \
     --account-name your-storage-account-name
 ```
 
-### 5. Update Configuration
+### 4. Update Configuration for API Management
 
-1. Get your Function App URL from Azure Portal
-2. Update `API_BASE_URL` in `static_website/app.js`
-3. Re-upload the static website files
+Since you've set up Azure API Management, you'll use the API Management gateway URL instead of the direct Function App URL:
+
+1. **Get your API Management Gateway URL:**
+   ```bash
+   # Get API Management gateway URL
+   az apim show --name your-api-management-name --resource-group your-rg --query "gatewayUrl" --output tsv
+   ```
+
+2. **Update API_BASE_URL in static_website/app.js:**
+   - Replace the Function App URL with your API Management URL
+   - Example: `https://mediametadata-python-functions-apim.azure-api.net/mediametadata-python-functions`
+   - The path after the domain should match your API path in API Management
+
+3. **Re-upload the static website files:**
+   ```bash
+   az storage blob upload-batch \
+       --destination '$web' \
+       --source "./static_website" \
+       --account-name your-storage-account-name
+   ```
+
+### 5. API Management Configuration
+
+**Disable Subscription Key Requirement (Recommended for Development):**
+
+To make testing easier, you can disable the subscription key requirement:
+
+```bash
+# Disable subscription key requirement for your API
+az apim api update \
+    --resource-group your-rg \
+    --service-name your-api-management-name \
+    --api-id your-api-id \
+    --subscription-required false
+```
+
+**Alternative: Enable Subscription Key (For Production):**
+
+If you want to add additional API Management security features:
+
+1. **Keep or enable subscription key requirement:**
+   ```bash
+   # Enable subscription key requirement for your API
+   az apim api update \
+       --resource-group your-rg \
+       --service-name your-api-management-name \
+       --api-id your-api-id \
+       --subscription-required true
+   ```
+
+2. **Create a subscription for your API:**
+   ```bash
+   # Create a subscription for your API
+   az apim subscription create \
+       --resource-group your-rg \
+       --service-name your-api-management-name \
+       --name media-api-subscription \
+       --display-name "Media API Subscription"
+   ```
+
+3. **Update frontend to include subscription key:**
+   - Add `Ocp-Apim-Subscription-Key` header to all API calls
+   - Get the subscription key from Azure Portal or CLI
+
+4. **Configure rate limiting, caching, or other policies as needed**
 
 ## Testing the API
 
@@ -117,6 +166,25 @@ python test_api.py
 
 ### 3. Manual API Testing with curl
 
+**Using API Management Gateway URL (No Subscription Key Required):**
+
+```bash
+# Test upload (replace with your API Management URL)
+curl -X POST "https://your-apim-name.azure-api.net/your-api-path/media/upload_media_file?userId=test-user" \
+     -F "file=@test-image.jpg"
+
+# Test get metadata
+curl "https://your-apim-name.azure-api.net/your-api-path/media/get_media_metadata?userId=test-user"
+
+# Test search
+curl "https://your-apim-name.azure-api.net/your-api-path/media/search_media?userId=test-user&fileType=image"
+
+# Test delete
+curl -X DELETE "https://your-apim-name.azure-api.net/your-api-path/media/delete_media_file?userId=test-user&fileId=file-id"
+```
+
+**Alternative: Direct Function App URLs:**
+
 ```bash
 # Test upload (replace with actual URLs and file)
 curl -X POST "https://your-function-app.azurewebsites.net/api/media/upload_media_file?userId=test-user" \
@@ -134,25 +202,31 @@ curl -X DELETE "https://your-function-app.azurewebsites.net/api/media/delete_med
 
 ## API Endpoints Reference
 
+**Base URL Options:**
+- **API Management Gateway:** `https://your-api-management-name.azure-api.net/your-api-path`
+- **Direct Function App:** `https://your-function-app.azurewebsites.net/api/media`
+
+**Note:** Subscription keys are disabled by default, so no `Ocp-Apim-Subscription-Key` header is required.
+
 ### 1. Upload Media File
 - **Method:** POST
-- **URL:** `/api/media/upload_media_file`
+- **URL:** `/upload_media_file`
 - **Parameters:** `userId` (required)
 - **Body:** File upload (multipart/form-data)
 
 ### 2. Get Media Metadata
 - **Method:** GET
-- **URL:** `/api/media/get_media_metadata`
+- **URL:** `/get_media_metadata`
 - **Parameters:** `userId` (required), `fileId` (optional)
 
 ### 3. Search Media Files
 - **Method:** GET
-- **URL:** `/api/media/search_media`
+- **URL:** `/search_media`
 - **Parameters:** `userId` (required), `fileType`, `tag`, `fromDate`, `toDate` (optional)
 
 ### 4. Delete Media File
 - **Method:** DELETE
-- **URL:** `/api/media/delete_media_file`
+- **URL:** `/delete_media_file`
 - **Parameters:** `userId` (required), `fileId` (required)
 
 ## Troubleshooting
@@ -173,9 +247,20 @@ curl -X DELETE "https://your-function-app.azurewebsites.net/api/media/delete_med
 
 4. **CORS errors from static website:**
    - Enable CORS on Function App for your static website domain
+   - Configure CORS policies in API Management if using APIM gateway
+
+5. **API Management authentication errors:**
+   - Check if subscription key is required and correctly configured
+   - Verify API Management policies are not blocking requests
+   - Ensure the Function App backend is properly linked in APIM
+
+6. **API Management rate limiting:**
+   - Check if rate limiting policies are configured in APIM
+   - Verify subscription quotas and limits
 
 ### Useful Azure CLI Commands:
 
+**Function App Commands:**
 ```bash
 # Check Function App logs
 az functionapp log tail --name your-function-app --resource-group your-rg
@@ -185,6 +270,21 @@ az functionapp config appsettings list --name your-function-app --resource-group
 
 # Test Function App connectivity
 az functionapp show --name your-function-app --resource-group your-rg --query "state"
+```
+
+**API Management Commands:**
+```bash
+# Get API Management gateway URL
+az apim show --name your-apim-name --resource-group your-rg --query "gatewayUrl" --output tsv
+
+# List APIs in API Management
+az apim api list --resource-group your-rg --service-name your-apim-name --output table
+
+# Get subscription keys
+az apim subscription list --resource-group your-rg --service-name your-apim-name --output table
+
+# Test API Management connectivity
+az apim show --name your-apim-name --resource-group your-rg --query "provisioningState"
 ```
 
 ## Next Steps
