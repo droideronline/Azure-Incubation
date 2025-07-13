@@ -2,10 +2,7 @@
 
 ## Prerequisites
 
-Before starting, ensure you 2. **Update API_BASE_URL in static_website/app.js:**
-   - Replace the placeholder URL with your API Management URL
-   - Example: `https://your-api-management-name.azure-api.net/your-api-path`
-   - The path after the domain should match your API path in API Management:
+Before starting, ensure you have:
 
 1. **Azure CLI** installed and logged in
 2. **Azure Functions Core Tools** v4 installed
@@ -92,8 +89,8 @@ Since you've set up Azure API Management, you'll use the API Management gateway 
    ```
 
 2. **Update API_BASE_URL in static_website/app.js:**
-   - Replace the Function App URL with your API Management URL
-   - Example: `https://mediametadata-python-functions-apim.azure-api.net/mediametadata-python-functions`
+   - Replace the placeholder URL with your API Management URL
+   - Example: `https://your-api-management-name.azure-api.net/your-api-path`
    - The path after the domain should match your API path in API Management
 
 3. **Re-upload the static website files:**
@@ -157,14 +154,7 @@ If you want to add additional API Management security features:
 2. Enter a User ID (e.g., "demo-user")
 3. Upload test files and verify functionality
 
-### 2. Using the Python Test Script
-
-```bash
-# Update API_BASE_URL in test_api.py
-python test_api.py
-```
-
-### 3. Manual API Testing with curl
+### 2. Manual API Testing with curl
 
 **Using API Management Gateway URL (No Subscription Key Required):**
 
